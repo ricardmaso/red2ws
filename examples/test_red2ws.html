@@ -1,0 +1,163 @@
+<!DOCTYPE HTML>
+<html>
+   <head>
+       <style> 
+            table { 
+                width: 100%; 
+            } 
+        </style> 
+   </head>
+   <body>
+   <table id="TblChannels" style="width:100%;">
+    <thead>
+        <tr>
+            <td style="text-align:left;"><input type="button" id="BtnAddChannel" onclick="AddChannel();" value="Add Channel"></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td style="text-align:right;"><input type="button" id="BtnDelChannel" onclick="DelChannel();" value="Del Channel"></td>
+        </tr>
+    </thead>
+        <tbody id="TblBodyChannels" num=0>
+        </tbody>
+   </table>
+   </body>
+   <script type = "text/javascript">
+
+    function AddChannel(){
+        var iBody=document.getElementById("TblBodyChannels");
+        var iNum=parseInt(iBody.getAttribute("num"))+1;
+        iBody.setAttribute("num",iNum);
+        var iRow=iBody.insertRow();
+        iRow.id="row" + iNum;
+
+        var iTd=iRow.insertCell(0);
+        iTd.style="overflow-y:scroll;"
+        var iTxtMsg = document.createElement('div');
+        iTxtMsg.style.display="hidden";
+        iTxtMsg.style.width="500px";
+        iTxtMsg.style.height="250px";
+        iTxtMsg.id = "TxtMsg" + iNum;
+        iTd.appendChild(iTxtMsg);
+
+        var iTd=iRow.insertCell(0);
+        var iBtnDisconnect = document.createElement('input');
+        iBtnDisconnect.type = "button";
+        iBtnDisconnect.value = "DisConnect";
+        iBtnDisconnect.id = "bntdisconnect" + iNum;
+        iBtnDisconnect.setAttribute('TxtChannel', "Channel"+iNum);
+        iBtnDisconnect.setAttribute('button', "bntconnect"+iNum);
+        iBtnDisconnect.setAttribute('TxtMsg', "TxtMsg" + iNum);
+        iBtnDisconnect.onclick=function(event) { DisConnect(this);}
+        iBtnDisconnect.disabled=true;
+        iTd.appendChild(iBtnDisconnect);
+
+        var iTd=iRow.insertCell(0);
+        var iBtnConnect = document.createElement('input');
+        iBtnConnect.type = "button";
+        iBtnConnect.value = "Connect";
+        iBtnConnect.id = "bntconnect" + iNum;
+        iBtnConnect.setAttribute('TxtChannel', "Channel"+iNum);
+        iBtnConnect.setAttribute('button', "bntdisconnect"+iNum);
+        iBtnConnect.setAttribute('TxtMsg', "TxtMsg" + iNum);
+        iBtnConnect.onclick=function(event) { Connect(this);}
+        iTd.appendChild(iBtnConnect);
+
+        
+        var iTd=iRow.insertCell(0);
+        var iTxtChannel = document.createElement('input');
+        iTxtChannel.type = "text";
+        iTxtChannel.value = "";
+        iTxtChannel.id = "Channel"+iNum;
+        iTd.appendChild(iTxtChannel);
+
+        var iTd=iRow.insertCell(0);
+        var iLblChannel = document.createElement('label');
+        iLblChannel.value = "Channel:";
+        iLblChannel.id="lblchannel" + iNum;
+        iLblChannel.setAttribute('for',"Channel"+iNum);
+        iLblChannel.appendChild(document.createTextNode("Channel:"));
+        iTd.appendChild(iLblChannel);
+
+        var iTd=iRow.insertCell(0);
+        var iTxtOption = document.createElement('input');
+        iTxtOption.type="radio";
+        iTxtOption.id = "Select" + iNum;
+        iTxtOption.name="select"
+        iTxtOption.value="row" + iNum;
+        iTxtOption.setAttribute('BtnDisconnect',"bntdisconnect" + iNum);
+        iTd.appendChild(iTxtOption);
+
+        var iTd=iRow.insertCell(0);
+
+
+    }
+
+    function _GetSelectedRow(){
+        var iRadios = document.getElementsByName('select'); 
+        for (var i = 0; i < iRadios.length; i++) { 
+            if (iRadios[i].checked)  return iRadios[i];
+        }
+        return null;
+    }
+    
+
+    function DelChannel(){
+        var iOpt=_GetSelectedRow();
+        if (iOpt){
+            DisConnect(document.getElementById(iOpt.getAttribute("BtnDisconnect")));
+            document.getElementById(iOpt.value).remove(); 
+        }else{
+            alert("Select row to delete");
+        }
+    }
+
+    function Connect(aThis){
+        var iRet=false;
+        var iMsgTxt=document.getElementById(aThis.getAttribute("TxtMsg"));
+        var iChannelTxt=document.getElementById(aThis.getAttribute("TxtChannel"));
+        var iButton=document.getElementById(aThis.getAttribute("button"));
+        var iError="";
+        if (!"WebSocket" in window) iError="WebSocket Not suported";
+        if (iChannelTxt.value=="") iError="No Channel info";
+        if (iError==""){
+            var iUrl="ws://localhost:8080/" + iChannelTxt.value;
+            iWs=new WebSocket(iUrl)
+            iWs.onopen=function(){}
+            iWs.onclose=function(){}
+            iWs.onmessage = function (aMsg) {
+                iMsgTxt.innerHTML= aMsg.data + "<br>" + iMsgTxt.innerHTML;                
+            };
+            iChannelTxt.Ws=iWs
+            iButton.disabled=false;
+            aThis.disabled=true;
+            iMsgTxt.value="";
+            iMsgTxt.style.display="block";
+
+            iRet=true;
+        }else{
+            alert(iError);
+        }     
+        return iRet
+    }
+    function DisConnect(aThis){
+        var iRet=false;
+        var iChannelTxt=document.getElementById(aThis.getAttribute("TxtChannel"));
+        var iButton=document.getElementById(aThis.getAttribute("button"));
+        var iMsgTxt=document.getElementById(aThis.getAttribute("TxtMsg"));
+        if ("Ws" in iChannelTxt){
+            iChannelTxt.Ws.close();
+            iChannelTxt.Ws=undefined;
+            iRet=true;
+            iMsgTxt.value="";
+            iButton.disabled=false;
+            aThis.disabled=true;
+            iMsgTxt.style.display="none";
+
+        }     
+        return iRet
+    }
+   </script>
+</html>

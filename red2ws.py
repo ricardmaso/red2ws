@@ -17,7 +17,7 @@ try:
     import simplejson as json
 except ImportError:
     import json
-#wscat -c wss://armariunificat.bcn.cat/SUBSCRIBE/BCN_6_AU0600010
+
 class nsCaptureException(object):    
     iType=""
     @property
@@ -38,44 +38,150 @@ class nsCaptureException(object):
     def Trace(self,aValue):self.iTrace=aValue
     def __init__(self,aInfo):self.Type, self.Value, self.Trace = aInfo
     def __str__(self):return "Error:"+self.Value + " Type:" + self.Type + "TraceBack:" + self.TraceStr
+    
 class WSHandler(tornado.websocket.WebSocketHandler):
+
+    @property
+    def Th(self):return self._Th
+    @Th.setter
+    def Th(self,aValue):self._Th=aValue
+    
     @property
     def Parent(self):return self.application.Server
     @property
     def RemoteIp(self):return self.request.remote_ip
     @property
-    def Id(self):return id(self)
+    def Key(self):return self._Key
+    @Key.setter
+    def Key(self,aValue):
+        self._Key=aValue
+    @property
+    def Logger(self):
+        if self._Logger==None:self._Logger=self.Parent.Logger
+        return self._Logger
+    @Logger.setter
+    def Logger(self,aValue):self._Logger=aValue
+    @property
+    def Debug(self):
+        if self._Debug==None:self._Debug=self.Parent.Debug
+        return self._Debug
+    @Debug.setter
+    def Debug(self,aValue):self._Debug=aValue
+    @property
+    def Running(self):return self._Running
+    @Running.setter
+    def Running(self,aValue):self._Running=aValue
+    @property
+    def WebSockets(self):
+        if self._WebSockets==None:self._WebSockets=self.Parent.WebSockets
+        return self._WebSockets
+    @WebSockets.setter
+    def WebSockets(self,aValue):self._WebSockets=aValue
+    @property
+    def Redis(self):
+        if self._Redis==None:self._Redis=self.Parent.Redis
+        return self._Redis
+    @Redis.setter
+    def Redis(self,aValue):self._Redis=aValue
+
+    @property
+    def RedisSubscription(self):
+        if self._RedisSubscription==None:
+            self._RedisSubscription=self.Redis.pubsub()
+            self._RedisSubscription.subscribe(self.Key)
+        return self._RedisSubscription
+
+    @RedisSubscription.setter
+    def RedisSubscription(self,aValue):
+        if self._RedisSubscription!=None:
+            self._RedisSubscription.unsubscribe(self.Key)
+        self._RedisSubscription=aValue
+
+    def DebugMsg(self,aMsg):
+        if self.Debug:self.Logger.debug(aMsg)
+
+
+    def StartListener(self):
+        if self.Running==False:
+            if self not in self.WebSockets:
+                self.WebSockets.append(self)
+                self.Running=True
+                self.Th=threading.Thread(target = self.Loop)
+                self.Th.daemon=True
+                self.Th.start()
+        
+    def StopListener(self):
+        if self.Running:
+            
+            if self in self.WebSockets:
+                self.WebSockets.remove(self)
+                
+                self.RedisSubscription=None
+                self.Running=False
+                
+                self.Th=None
+                
+
+    def Loop(self):
+        iMsg=None
+        self.DebugMsg("Start Loop")
+        while self.Running:
+            time.sleep(0.001)
+            try:
+                iMsg=self.RedisSubscription.get_message(timeout=1)
+                if iMsg:            
+                    if iMsg['channel'] == self.Key:self.Write(json.dumps(iMsg))
+                if self.Running==False:break
+            except redis.ConnectionError as E:
+                iError=str(E) + ":" + " Listener " + str(nsCaptureException(sys.exc_info())) + " (" + str(self.Key) + ":" + str(iMsg)  + ")"
+                self.Logger.error(iError)  
+            except Exception as E:
+                iError = "red2ws.Loop(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + str(iMsg) + ")"
+                self.Logger.error(iError )    
+        self.DebugMsg("Stop Loop")
+                
     def open(self,aUrl):
-        self.Parent.Logger.info("OPEN: " + aUrl)
-        self.Key=aUrl.upper()
         self._Contador=0
-        if self.Parent.Debug:self.Parent.Logger.debug("DEBUG: OPEN WS (" + str(self.Id) + ") from " + self.RemoteIp)
-        self.Parent.WebSockets.append(self)      
-        #Publish connection
-        self.Parent.REDISPublish(self.Key + "_CLIENTCONNECT", 1)
+        self.Key=aUrl
+        self.StartListener()
+        self.DebugMsg("OPEN: " + aUrl +" channel " + str(self.Key) + " from " + self.RemoteIp)  
         time.sleep(.5)
+
     def on_message(self, message):pass
-    def on_close(self):
-        self.Parent.Logger.info("CLOSE: " + self.Key)
-        if self.Parent.Debug:self.Parent.Logger.debug("DEBUG: CLOSE WS (" + str(self.Id) + ") from " + self.RemoteIp)
-        self.Parent.WebSockets.remove(self)
-        #Publish desconexion
-        self.Parent.REDISPublish(self.Key + "_CLIENTCONNECT", 0)
     def check_origin(self, origin):return True
+
+    def on_close(self,aCode = None, aReason = None):
+        
+        
+        self.DebugMsg("DEBUG: CLOSE WS (" + str(self.Key) + ") from " + self.RemoteIp + " " + str(aCode) + ":" + str(aReason))
+        self.StopListener()
     def Write(self,aMsg):
-        iKey=""
         try:
             iObj=aMsg
-            iKey=iObj["IdInstalacion"]+"_"+iObj["IdUbicacion"]+"_"+iObj["IdControlador"]
-            iKey=iKey.upper()
-            if iKey==self.Key:
-                self._Contador=self._Contador+1
+            self._Contador=self._Contador+1
+            try:
                 self.write_message(iObj)
-                if self.Parent.Debug and self._Contador % 100 ==0:
-                    self.Parent.Logger.debug("DEBUG: PUBLISH WS (" + str(self.Id) + ") to " + self.RemoteIp + ": " + str(self._Contador))
+            except tornado.websocket.WebSocketClosedError as E:
+                pass
+            if self.Debug and self._Contador % 100 ==0:self.DebugMsg("DEBUG: PUBLISH WS (" + str(self.Id) + ") to " + self.RemoteIp + ": " + str(self._Contador))
         except Exception as E:
-            iError = "WSHandler.Write(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + iKey + ":" + json.dumps(aMsg) +  ")"
+            iError = "WSHandler.Write(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + self.Key + ":" + str(aMsg) +  ")"
             self.Parent.Logger.error(iError ) 
+    def __init__(self, *args, **kwargs):        
+        self._RedisSubscription=None
+        self._Redis=None
+        self._Th=None
+        self._WebSockets=None
+        self._Debug=None
+        self._Contador=0
+        self._Running=False
+        self._Logger=None
+        self._Parent=None
+        self._Key=None
+        self._Parent = kwargs.pop('aParent')
+        super(WSHandler, self).__init__(*args, **kwargs)
+
+
 class red2ws(object):
     @property
     def Debug(self):return self._Debug
@@ -100,7 +206,9 @@ class red2ws(object):
             self._Logger.addHandler(iHandler)
         return self._Logger
     @property
-    def WebSockets(self):return self._WebSockets
+    def WebSockets(self):
+        if self._WebSockets==None:self._WebSockets=self.Parent.WebSockets
+        return self._WebSockets
     @WebSockets.setter
     def WebSockets(self,aValue):self._WebSockets=aValue
     @property
@@ -108,15 +216,15 @@ class red2ws(object):
         if self._LocalIp==None:self._LocalIp=socket.gethostbyname(socket.gethostname())
         return self._LocalIp
     @property
-    def Pattern(self):
-        if self._Pattern==None:self._Pattern=r'/ws'
-        return self._Pattern
-    @Pattern.setter
-    def Pattern(self,aValue):self._Pattern=aValue
+    def Url(self):
+        if self._Url==None:self._Url=r'/(.+))'
+        return self._Url
+    @Url.setter
+    def Url(self,aValue):self._Url=aValue
     @property
     def App(self):
         if self._App==None:
-            self._App=tornado.web.Application([(self.Pattern, WSHandler),])
+            self._App=tornado.web.Application([(self.Url, WSHandler,{'aParent':self})])
             self._App.Server=self
         return self._App
     @App.setter
@@ -130,93 +238,42 @@ class red2ws(object):
     @Client.setter
     def Client(self,aValue):
         self._Client=aValue
-    def REDISPublish(self,aChannel,aValue):
-        try:
-            self.REDISClientSubs.publish(aChannel,aValue)
-            return True
-        except Exception as E:
-            iError = "red2ws.REDISPublish(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + aChannel + ":" + str(aValue) + ")"
-            self.Logger.error(iError )    
-            return False
+
     @property
     def Port(self):return self._Port
     @Port.setter
-    def Port(self,aValue):
-        self._Port=aValue
-        self.Reset()
+    def Port(self,aValue):self._Port=aValue
+        
     @property
     def Host(self):return self._Host
     @Host.setter
-    def Host(self,aValue):
-        self._Host=aValue
-        self.Reset()
+    def Host(self,aValue):self._Host=aValue
     def StartWs(self):
         iClient=self.Client
         tornado.ioloop.IOLoop.instance().start()
     def StopWs(self):
         tornado.ioloop.IOLoop.instance().stop()
         self.Client=None
-    def StartREDIS(self):
-        self._REDISRunning=True
-        self._Th=threading.Thread(target = self.REDISLoop)
-        self._Th.start()
-    def StopREDIS(self):
-        self._REDISRunning=False
-        self._Th=None
     def Start(self):
-        self.StartREDIS()
         self.StartWs()
     def Stop(self):
         self.StopWs()
-        self.StopREDIS()
-    def Write(self,aMsg):
-        for iWs in self.WebSockets:
-            iWs.Write(aMsg)
     def Reconnect(self,aMax=10):
         iRet=False
         iCont=1
         while 1:
             try:
                 iCont=iCont+1
-                self.REDISClient.ping()                
+                self.Redis.ping()                
             except redis.ConnectionError as E:
                 if iCont>aMax:break
                 time.sleep(aMax)
             else:                
-                self.REDISPubSub=None
-                self.REDISClient=None
+                self.Redis=None
                 iRet=True
                 break
-    def REDISLoop(self):
-        iMsg=None
-        while self._REDISRunning:
-            time.sleep(0.001)
-            try:
-                iData=""
-                iChannel=""
-                iType=""
-                iMsg=self.REDISPubSub.get_message(timeout=1)
-                if iMsg:
-                    iType=iMsg['type']
-                    if iType=="message":
-                        iChannel=iMsg['channel']          
-                        iData=iMsg['data']          
-                        if iChannel in self.REDISChannels:
-                            iData=json.loads(iMsg['data'])
-                            self.Write(iData)
-            except redis.ConnectionError as E:
-                iError=str(E) + ":" + " Listener " + str(nsCaptureException(sys.exc_info())) + " (" + str(self.REDISChannels) + ":" + str(iMsg)  + ")"
-                self.Logger.error(iError)  
-                if self.Reconnect()==False:raise Exception("Not Connected reconnect Fail")
-            except Exception as E:
-                iError = "red2ws.REDISLoop(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + iType + ":" + iChannel + ":" + str(iData) + ")"
-                self.Logger.error(iError )    
-                self.ResetREDIS()
-    def Reset(self):self.Client=None
-    def ResetREDIS(self):
-        self.REDISPubSub=None
-        self.REDISClient=None
-        self.REDISClientSubs=None
+
+
     @property
     def REDISIp(self):return self._REDISIp
     @REDISIp.setter
@@ -225,53 +282,27 @@ class red2ws(object):
     def REDISPort(self):return self._REDISPort
     @REDISPort.setter
     def REDISPort(self,aValue):self._REDISPort=aValue
+
     @property
-    def REDISChannels(self):return self._REDISChannels
-    @REDISChannels.setter
-    def REDISChannels(self,aValue):self._REDISChannels=aValue
-    @property
-    def REDISClient(self):
-        if self._REDISClient==None:
+    def Redis(self):
+        if self._Redis==None:
             try:
-                self._REDISClient=redis.StrictRedis(host=self.REDISIp, port=self.REDISPort)
+                self._Redis=redis.StrictRedis(host=self.REDISIp, port=self.REDISPort)
             except Exception as E:
-                iError = "red2ws.REDISClient(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + self.REDISIp + ":" + str(self.REDISPort) + ")"
+                iError = "red2ws.Redis(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + self.REDISIp + ":" + str(self.REDISPort) + ")"
                 self.Logger.error(iError )    
-                self._REDISCLient=None
-        return self._REDISClient
-    @REDISClient.setter
-    def REDISClient(self,aValue):self._REDISClient=aValue
-    @property
-    def REDISClientSubs(self):
-        if self._REDISClientSubs==None:
-            try:
-                self._REDISClientSubs=redis.StrictRedis(host=self.REDISIp, port=self.REDISPort)
-            except Exception as E:
-                iError = "red2ws.REDISClientSubs(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + self.REDISIp + ":" + str(self.REDISPort) + ")"
-                self.Logger.error(iError )    
-                self._REDISClientSubs=None
-        return self._REDISClientSubs
-    @REDISClientSubs.setter
-    def REDISClientSubs(self,aValue):self._REDISClientSubs=aValue
-    @property
-    def REDISPubSub(self):
-        if self._REDISPubSub==None:
-            try:
-                self._REDISPubSub=self.REDISClient.pubsub()
-                iLst=self.REDISChannels.split(",")
-                for i in iLst:
-                    self._REDISPubSub.subscribe(i)
-            except Exception as E:
-                iError = "red2ws.REDISPubSub(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + self.REDISChannels + ")"
-                self.Logger.error(iError )    
-                self._REDISCLient=None
-        return self._REDISPubSub
-    @REDISPubSub.setter
-    def REDISPubSub(self,aValue):self._REDISPubSub=aValue
-    def __init__(self,aHost="0.0.0.0",aPort=8000,aPattern=r'/SUBSCRIBE/(.+)',aRedisIp="127.0.0.1",aRedisPort=7001,aRedisChannels="BCN_6_AU0600010",aDebug=False):
+                self._Redis=None
+        return self._Redis
+
+    @Redis.setter
+    def Redis(self,aValue):self._Redis=aValue
+    
+    
+   
+    def __init__(self,aHost="0.0.0.0",aPort=8080,aUrl=r'/(.+)',aRedisIp="127.0.0.1",aRedisPort=7001,aDebug=False):
         self._App=None
         self._LocalIp=None
-        self._Pattern=None
+        self._Url=None
         self._Client=None
         self._ClientSubs=None
         self._REDISPubSub=None
@@ -280,30 +311,28 @@ class red2ws(object):
         self._Debug=aDebug
         self._WebSockets=[]
         self._Th=None
-        self._REDISRunning=False
         self._Port=aPort
         self._Host=aHost
         self._REDISPort=aRedisPort
-        self._Pattern=aPattern
+        self.Url=aUrl
         self._REDISIp=aRedisIp
         self._REDISPort=aRedisPort
-        self._REDISChannels=aRedisChannels
-        self._REDISClient=None
-        self._REDISClientSubs=None
+        self._Redis=None
+        
 def GetParams():
     iParser = argparse.ArgumentParser("WebSocket Server Redis")
-    iParser.add_argument("--websockport",type=int,help="WebSocket Port",default=8000)
+    iParser.add_argument("--websockport",type=int,help="WebSocket Port",default=8080)
     iParser.add_argument("--websockhost",type=str,help="WebSocket Host",default="0.0.0.0")
-    iParser.add_argument("--websockpattern",type=str,help="WebSocket Pattern",default=r'/SUBSCRIBE/(.+)')
+    iParser.add_argument("--websockurl",type=str,help="WebSocket Url",default=r'/(.+)')
     iParser.add_argument("--redishost",type=str,help="Redis Host",default="127.0.0.1")
-    iParser.add_argument("--redisport",type=int,help="Redis Port",default=7001)
-    iParser.add_argument("--redischannels",type=str,help="Redis Channels",default="BCN_6_AU0600010,BCN_6_AU0600020,BCN_6_AU0600030,BCN_6_AU0600040,BCN_6_AU0600050,BCN_10_AU1000070,BCN_2_AU0200060")
+    iParser.add_argument("--redisport",type=int,help="Redis Port",default=6379)
     iParser.add_argument("--debug",type=int,help="Debug",default=0)
     return iParser.parse_args()
 def Main():
+    iObj=None
     try:
         iParams=GetParams()
-        iObj=red2ws(iParams.websockhost,iParams.websockport,iParams.websockpattern,iParams.redishost,iParams.redisport,iParams.redischannels,iParams.debug==1)
+        iObj=red2ws(iParams.websockhost,iParams.websockport,iParams.websockurl,iParams.redishost,iParams.redisport,iParams.debug==1)
         iObj.Start()
     except KeyboardInterrupt as Ke:
         pass
@@ -311,8 +340,9 @@ def Main():
         iError = "MAIN(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info()))
         iError=iError.replace("\n"," ")
         iObj.Logger.error(iError)
-        
     finally:
-        iObj.Stop()
-if __name__ == "__main__":Main()
+        if iObj!=None:iObj.Stop()
+
+if __name__ == "__main__":
+    Main()
     
