@@ -28,20 +28,23 @@
 
     function AddChannel(){
         var iBody=document.getElementById("TblBodyChannels");
+        //Recover new row number
         var iNum=parseInt(iBody.getAttribute("num"))+1;
         iBody.setAttribute("num",iNum);
+        //Insert new row
         var iRow=iBody.insertRow();
         iRow.id="row" + iNum;
-
+        iRow.style.height="150px";
+        //Insert td for div msg to new row
         var iTd=iRow.insertCell(0);
         iTd.style="overflow-y:scroll;"
         var iTxtMsg = document.createElement('div');
         iTxtMsg.style.display="hidden";
         iTxtMsg.style.width="500px";
-        iTxtMsg.style.height="250px";
+        iTxtMsg.style.height="150px";
         iTxtMsg.id = "TxtMsg" + iNum;
+        //Insert td for button disconnect to new row
         iTd.appendChild(iTxtMsg);
-
         var iTd=iRow.insertCell(0);
         var iBtnDisconnect = document.createElement('input');
         iBtnDisconnect.type = "button";
@@ -53,7 +56,7 @@
         iBtnDisconnect.onclick=function(event) { DisConnect(this);}
         iBtnDisconnect.disabled=true;
         iTd.appendChild(iBtnDisconnect);
-
+        //Insert td for button connect to new row
         var iTd=iRow.insertCell(0);
         var iBtnConnect = document.createElement('input');
         iBtnConnect.type = "button";
@@ -64,23 +67,22 @@
         iBtnConnect.setAttribute('TxtMsg', "TxtMsg" + iNum);
         iBtnConnect.onclick=function(event) { Connect(this);}
         iTd.appendChild(iBtnConnect);
-
-        
+        //Insert td for input channel to new row
         var iTd=iRow.insertCell(0);
         var iTxtChannel = document.createElement('input');
         iTxtChannel.type = "text";
         iTxtChannel.value = "";
         iTxtChannel.id = "Channel"+iNum;
         iTd.appendChild(iTxtChannel);
-
+        //Insert td for lable channel to new row
         var iTd=iRow.insertCell(0);
         var iLblChannel = document.createElement('label');
-        iLblChannel.value = "Channel:";
+        iLblChannel.value = "Channel" + iNum +":";
         iLblChannel.id="lblchannel" + iNum;
         iLblChannel.setAttribute('for',"Channel"+iNum);
         iLblChannel.appendChild(document.createTextNode("Channel:"));
         iTd.appendChild(iLblChannel);
-
+        //Insert td for radio button select row to new row
         var iTd=iRow.insertCell(0);
         var iTxtOption = document.createElement('input');
         iTxtOption.type="radio";
@@ -89,12 +91,9 @@
         iTxtOption.value="row" + iNum;
         iTxtOption.setAttribute('BtnDisconnect',"bntdisconnect" + iNum);
         iTd.appendChild(iTxtOption);
-
         var iTd=iRow.insertCell(0);
-
-
     }
-
+    //Find row selected
     function _GetSelectedRow(){
         var iRadios = document.getElementsByName('select'); 
         for (var i = 0; i < iRadios.length; i++) { 
@@ -102,8 +101,7 @@
         }
         return null;
     }
-    
-
+    //Del selected channel
     function DelChannel(){
         var iOpt=_GetSelectedRow();
         if (iOpt){
@@ -113,7 +111,7 @@
             alert("Select row to delete");
         }
     }
-
+    //Connect to web socket to channel
     function Connect(aThis){
         var iRet=false;
         var iMsgTxt=document.getElementById(aThis.getAttribute("TxtMsg"));
@@ -124,10 +122,12 @@
         if (iChannelTxt.value=="") iError="No Channel info";
         if (iError==""){
             var iUrl="ws://localhost:8080/" + iChannelTxt.value;
+            //Create WebSocket
             iWs=new WebSocket(iUrl)
             iWs.onopen=function(){}
             iWs.onclose=function(){}
             iWs.onmessage = function (aMsg) {
+                //Capture redis msg and print into div last message is the first line
                 iMsgTxt.innerHTML= aMsg.data + "<br>" + iMsgTxt.innerHTML;                
             };
             iChannelTxt.Ws=iWs
@@ -135,20 +135,20 @@
             aThis.disabled=true;
             iMsgTxt.value="";
             iMsgTxt.style.display="block";
-
             iRet=true;
         }else{
             alert(iError);
         }     
         return iRet
     }
+    //Disconnect ws
     function DisConnect(aThis){
         var iRet=false;
         var iChannelTxt=document.getElementById(aThis.getAttribute("TxtChannel"));
         var iButton=document.getElementById(aThis.getAttribute("button"));
         var iMsgTxt=document.getElementById(aThis.getAttribute("TxtMsg"));
         if ("Ws" in iChannelTxt){
-            iChannelTxt.Ws.close();
+            if (iChannelTxt.Ws) iChannelTxt.Ws.close();
             iChannelTxt.Ws=undefined;
             iRet=true;
             iMsgTxt.value="";
