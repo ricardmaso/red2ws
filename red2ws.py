@@ -61,6 +61,7 @@ if PYTHON3:
     import tornado.platform.asyncio
     import asyncio
     asyncio.set_event_loop_policy(tornado.platform.asyncio.AnyThreadEventLoopPolicy())
+    logging.getLogger('asyncio').setLevel(logging.CRITICAL)
     
 class WSHandler(tornado.websocket.WebSocketHandler):
     @property
@@ -364,7 +365,6 @@ def Main():
         iObj.Logger.error(iError)
     finally:
         if iObj!=None:
-
             iObj.Stop()
 
 if __name__ == "__main__":
