@@ -27,9 +27,9 @@ other parameters
 <ol>
   <li>Run red2ws: ./red2ws.py --debug=1</li>
   <li>Run ./examples/test_red2ws.html in your browser</li>
-  <li>In the browser, click Add Channel Button <img src="https://raw.githubusercontent.com/ricardmaso/red2ws/master/img/Selecci%C3%B3n_196.png"></li>
+  <li>In the browser, click Add Channel Button <img src="https://raw.githubusercontent.com/ricardmaso/red2ws/master/img/Selecci%C3%B3n_194.png"></li>
   <li>Put channel id in the input channel</li>
-  <li>Click connect button</li>
+  <li>Click connect button <img src="https://raw.githubusercontent.com/ricardmaso/red2ws/master/img/Selecci%C3%B3n_195.png"></li>
   <li>Publish data in redis to channel from command line with redis-cli publish [Channel] [Msg]</li>
-  <li>Or publish in redis from publish button in a browser</li>
+  <li>Or publish in redis from publish button in a browser <img src="https://raw.githubusercontent.com/ricardmaso/red2ws/master/img/Selecci%C3%B3n_196.png"></li>
 </ol>
