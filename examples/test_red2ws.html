@@ -17,6 +17,8 @@
             <td></td>
             <td></td>
             <td></td>
+            <td></td>
+            
             <td style="text-align:right;"><input type="button" id="BtnDelChannel" onclick="DelChannel();" value="Del Channel"></td>
         </tr>
     </thead>
@@ -43,8 +45,21 @@
         iTxtMsg.style.width="500px";
         iTxtMsg.style.height="150px";
         iTxtMsg.id = "TxtMsg" + iNum;
-        //Insert td for button disconnect to new row
         iTd.appendChild(iTxtMsg);
+        //Insert td for button publish to new row
+        var iTd=iRow.insertCell(0);
+        var iBtnPublish = document.createElement('input');
+        iBtnPublish.type = "button";
+        iBtnPublish.value = "Publish";
+        iBtnPublish.id = "bntpublish" + iNum;
+        iBtnPublish.setAttribute('TxtChannel', "Channel"+iNum);
+        iBtnPublish.setAttribute('button', "bntconnect"+iNum);
+        iBtnPublish.setAttribute('buttonpublish', "bntpublish"+iNum);
+        iBtnPublish.setAttribute('TxtMsg', "TxtMsg" + iNum);
+        iBtnPublish.onclick=function(event) { Publish(this);}
+        iBtnPublish.disabled=true;
+        iTd.appendChild(iBtnPublish);
+        //Insert td for button disconnect to new row
         var iTd=iRow.insertCell(0);
         var iBtnDisconnect = document.createElement('input');
         iBtnDisconnect.type = "button";
@@ -52,6 +67,7 @@
         iBtnDisconnect.id = "bntdisconnect" + iNum;
         iBtnDisconnect.setAttribute('TxtChannel', "Channel"+iNum);
         iBtnDisconnect.setAttribute('button', "bntconnect"+iNum);
+        iBtnDisconnect.setAttribute('buttonpublish', "bntpublish"+iNum);
         iBtnDisconnect.setAttribute('TxtMsg', "TxtMsg" + iNum);
         iBtnDisconnect.onclick=function(event) { DisConnect(this);}
         iBtnDisconnect.disabled=true;
@@ -64,6 +80,7 @@
         iBtnConnect.id = "bntconnect" + iNum;
         iBtnConnect.setAttribute('TxtChannel', "Channel"+iNum);
         iBtnConnect.setAttribute('button', "bntdisconnect"+iNum);
+        iBtnConnect.setAttribute('buttonpublish', "bntpublish"+iNum);
         iBtnConnect.setAttribute('TxtMsg', "TxtMsg" + iNum);
         iBtnConnect.onclick=function(event) { Connect(this);}
         iTd.appendChild(iBtnConnect);
@@ -117,6 +134,7 @@
         var iMsgTxt=document.getElementById(aThis.getAttribute("TxtMsg"));
         var iChannelTxt=document.getElementById(aThis.getAttribute("TxtChannel"));
         var iButton=document.getElementById(aThis.getAttribute("button"));
+        var iButtonPublish=document.getElementById(aThis.getAttribute("buttonpublish"));
         var iError="";
         if (!"WebSocket" in window) iError="WebSocket Not suported";
         if (iChannelTxt.value=="") iError="No Channel info";
@@ -132,6 +150,7 @@
             };
             iChannelTxt.Ws=iWs
             iButton.disabled=false;
+            iButtonPublish.disabled=false;
             aThis.disabled=true;
             iMsgTxt.value="";
             iMsgTxt.style.display="block";
@@ -147,14 +166,30 @@
         var iChannelTxt=document.getElementById(aThis.getAttribute("TxtChannel"));
         var iButton=document.getElementById(aThis.getAttribute("button"));
         var iMsgTxt=document.getElementById(aThis.getAttribute("TxtMsg"));
+        var iButtonPublish=document.getElementById(aThis.getAttribute("buttonpublish"));
         if ("Ws" in iChannelTxt){
             if (iChannelTxt.Ws) iChannelTxt.Ws.close();
             iChannelTxt.Ws=undefined;
             iRet=true;
             iMsgTxt.value="";
             iButton.disabled=false;
+            iButtonPublish.disabled=true;
             aThis.disabled=true;
             iMsgTxt.style.display="none";
+
+        }     
+        return iRet
+    }
+    //Publish data to redis
+    function Publish(aThis){
+        var iRet=false;
+        var iData = window.prompt("Data to publish: ");
+        if ((iData)&&(iData!=""))
+        {
+            var iChannelTxt=document.getElementById(aThis.getAttribute("TxtChannel"));
+            if (("Ws" in iChannelTxt) && (iChannelTxt.Ws)){
+                iChannelTxt.Ws.send(iData);
+            }
 
         }     
         return iRet

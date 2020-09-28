@@ -107,6 +107,13 @@ class WSHandler(tornado.websocket.WebSocketHandler):
     def Redis(self,aValue):self._Redis=aValue
 
     @property
+    def RedisWriter(self):
+        if self._RedisWriter==None:self._RedisWriter=self.Parent.RedisWriter
+        return self._RedisWriter
+    @RedisWriter.setter
+    def RedisWriter(self,aValue):self._RedisWriter=aValue
+
+    @property
     def RedisSubscription(self):
         if self._RedisSubscription==None:
             self._RedisSubscription=self.Redis.pubsub()
@@ -169,7 +176,8 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         self.DebugMsg("OPEN: " + aUrl +" channel " + str(self.Key) + " from " + self.RemoteIp)  
         time.sleep(.5)
 
-    def on_message(self, message):pass
+    def on_message(self, message):
+        self.RedisWriter.publish(self.Key,message)
     def check_origin(self, origin):return True
 
     def on_close(self,aCode = None, aReason = None):
@@ -194,6 +202,7 @@ class WSHandler(tornado.websocket.WebSocketHandler):
     def __init__(self, *args, **kwargs):        
         self._RedisSubscription=None
         self._Redis=None
+        self._RedisWriter=None
         self._Th=None
         self._WebSockets=None
         self._Debug=None
@@ -206,6 +215,14 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         super(WSHandler, self).__init__(*args, **kwargs)
 
 class red2ws(object):
+    @property
+    def SslCertFile(self):return self._SslCertFile
+    @SslCertFile.setter
+    def SslCertFile(self,aValue):self._SslCertFile=aValue
+    @property
+    def SslKeyFile(self):return self._SslKeyFile
+    @SslKeyFile.setter
+    def SslKeyFile(self,aValue):self._SslKeyFile=aValue
     @property
     def Debug(self):return self._Debug
     @Debug.setter
@@ -255,7 +272,9 @@ class red2ws(object):
     @property
     def Client(self):
         if self._Client==None:
-            self._Client=tornado.httpserver.HTTPServer(self.App)
+            iSsl=None
+            if os.path.exists(self.SslCertFile) and os.path.exists(self.SslKeyFile):iSsl={"certfile": self.SslCertFile,"keyfile": self.SslKeyFile}
+            self._Client=tornado.httpserver.HTTPServer(self.App,ssl_options=iSsl)
             self._Client.listen(self.Port,address=self.Host)
         return self._Client
     @Client.setter
@@ -305,21 +324,55 @@ class red2ws(object):
     def REDISPort(self):return self._REDISPort
     @REDISPort.setter
     def REDISPort(self,aValue):self._REDISPort=aValue
-
+    @property
+    def REDISPassword(self):return self._REDISPassword
+    @REDISPassword.setter
+    def REDISPassword(self,aValue):self._REDISPassword=aValue
+    @property
+    def REDISCaCerts(self):return self._REDISCaCerts
+    @REDISCaCerts.setter
+    def REDISCaCerts(self,aValue):self._REDISCaCerts=aValue
+    @property
+    def REDISDb(self):return self._REDISDb
+    @REDISDb.setter
+    def REDISDb(self,aValue):self._REDISDb=aValue
     @property
     def Redis(self):
         if self._Redis==None:
             try:
-                self._Redis=redis.StrictRedis(host=self.REDISIp, port=self.REDISPort)
+                iPass=None
+                if self.REDISPassword!="":iPass=self.REDISPassword
+                iSsl=False
+                iCa=None
+                if os.path.exists(self.REDISCaCerts):
+                    iSsl=True
+                    iCa=self.REDISCaCerts
+                self._Redis=redis.StrictRedis(host=self.REDISIp, port=self.REDISPort,password=iPass,ssl=False,ssl_ca_certs=iCa,db=self.REDISDb)
             except Exception as E:
                 iError = "red2ws.Redis(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + self.REDISIp + ":" + str(self.REDISPort) + ")"
                 self.Logger.error(iError )    
                 self._Redis=None
         return self._Redis
-
-    @Redis.setter
-    def Redis(self,aValue):self._Redis=aValue
-    def __init__(self,aHost="0.0.0.0",aPort=8080,aUrl=r'/(.+)',aRedisIp="127.0.0.1",aRedisPort=7001,aDebug=False):
+    @property
+    def RedisWriter(self):
+        if self._RedisWriter==None:
+            try:
+                iPass=None
+                if self.REDISPassword!="":iPass=self.REDISPassword
+                iSsl=False
+                iCa=None
+                if os.path.exists(self.REDISCaCerts):
+                    iSsl=True
+                    iCa=self.REDISCaCerts
+                self._RedisWriter=redis.StrictRedis(host=self.REDISIp, port=self.REDISPort,password=iPass,ssl=False,ssl_ca_certs=iCa,db=self.REDISDb)
+            except Exception as E:
+                iError = "red2ws.Redis(): " + str(E) + ":" + str(nsCaptureException(sys.exc_info())) + " (" + self.REDISIp + ":" + str(self.REDISPort) + ")"
+                self.Logger.error(iError )    
+                self._RedisWriter=None
+        return self._RedisWriter
+    @RedisWriter.setter
+    def RedisWriter(self,aValue):self._RedisWriter=aValue
+    def __init__(self,aHost="0.0.0.0",aPort=8080,aUrl=r'/(.+)',aRedisIp="127.0.0.1",aRedisPort=7001,aSslCertFile="",aSslKeyFile="",aRedisPassword="",aREDISCaCerts="",aRedisDb=0,aDebug=False):
         self._App=None
         self._LocalIp=None
         self._Url=None
@@ -334,10 +387,18 @@ class red2ws(object):
         self._Port=aPort
         self._Host=aHost
         self._REDISPort=aRedisPort
-        self.Url=aUrl
+        self._REDISPassword=aRedisPassword
+        self._REDISCaCerts=aREDISCaCerts
+        self._Url=aUrl
         self._REDISIp=aRedisIp
         self._REDISPort=aRedisPort
         self._Redis=None
+        self._RedisWriter=None
+        self._SslCertFile=aSslCertFile
+        self._SslKeyFile=aSslKeyFile
+        self._REDISDb=aRedisDb
+        
+
 
     
 def GetParams():
@@ -345,18 +406,21 @@ def GetParams():
     iParser.add_argument("--websockport",type=int,help="WebSocket Port",default=8080)
     iParser.add_argument("--websockhost",type=str,help="WebSocket Host",default="0.0.0.0")
     iParser.add_argument("--websockurl",type=str,help="WebSocket Url",default=r'/(.+)')
+    iParser.add_argument("--websocksslcertfile",type=str,help="ssl cert file for a wss:// protocol",default="")
+    iParser.add_argument("--websocksslkeyfile",type=str,help="ssl key file for a wss:// protocol",default="")
     iParser.add_argument("--redishost",type=str,help="Redis Host",default="127.0.0.1")
     iParser.add_argument("--redisport",type=int,help="Redis Port",default=6379)
+    iParser.add_argument("--redisdb",type=int,help="Redis db",default=0)
+    iParser.add_argument("--redispassword",type=str,help="Redis password",default="")
+    iParser.add_argument("--rediscacerts",type=str,help="Redis ca certs for ssl connections",default="")
     iParser.add_argument("--debug",type=int,help="Debug",default=0)
     return iParser.parse_args()
 def Main():
     iObj=None
     try:
         iParams=GetParams()
-        iObj=red2ws(iParams.websockhost,iParams.websockport,iParams.websockurl,iParams.redishost,iParams.redisport,iParams.debug==1)
+        iObj=red2ws(iParams.websockhost,iParams.websockport,iParams.websockurl,iParams.redishost,iParams.redisport,iParams.websocksslcertfile,iParams.websocksslkeyfile,iParams.redispassword,iParams.rediscacerts,iParams.redisdb,iParams.debug==1)
         iObj.Start()
-        
-        
     except KeyboardInterrupt as Ke:
         pass
     except Exception as E:
