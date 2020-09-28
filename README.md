@@ -1,7 +1,7 @@
 # red2ws
 <h2>Pure python 2.X, 3.X WebSocket interface for redis</h2>
-<h2>Connect to redis server using WebSockets from javascript and another langs</h2>
-<h3>Use</h3>
+<h3>Connect to redis server using WebSockets from javascript and another langs</h3>
+<h4>Use</h4>
 run: ./red2ws.py
 <br>
 help: ./red2ws.py --help
