@@ -1,5 +1,5 @@
 # red2ws
-<h2>Pure python 2.7 WebSocket interface for redis</h2>
+<h2>Pure python 2.X, 3.X WebSocket interface for redis</h2>
 <h3>Use</h3>
 run: ./red2ws.py
 <br>
@@ -22,7 +22,7 @@ other parameters
 <ol>
   <li>Run red2ws: ./red2ws.py --debug=1</li>
   <li>Run ./examples/test_red2ws.html in your browser</li>
-  <li>In the browser, click Add Channel Button</li>
+  <li>In the browser, click Add Channel Button <img src=""></li>
   <li>Put channel id in the input channel</li>
   <li>Click connect button</li>
   <li>Publish data to channel from command line with redis-cli publish [Channel] [Msg]</li>

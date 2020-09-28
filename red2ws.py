@@ -13,11 +13,16 @@ import argparse
 import traceback
 import sys
 import os
+import warnings
+warnings.filterwarnings('ignore')
 try:
     import simplejson as json
 except ImportError:
     import json
-
+try:
+    import asyncio
+except ImportError:
+    pass
 class nsCaptureException(object):    
     iType=""
     @property
@@ -39,13 +44,29 @@ class nsCaptureException(object):
     def __init__(self,aInfo):self.Type, self.Value, self.Trace = aInfo
     def __str__(self):return "Error:"+self.Value + " Type:" + self.Type + "TraceBack:" + self.TraceStr
     
+def Bytes2Str(aValue):
+    iRet=aValue
+    try:
+        if isinstance(aValue,bytes):
+            iRet=aValue.decode('utf-8')
+        else:
+            iRet=str(aValue)
+    except:
+        pass
+    return iRet
+def IsPython3():return sys.version_info[0]>2
+PYTHON3=IsPython3()
+if PYTHON3:
+    #Manage error when in tornado call write_message from another thread
+    import tornado.platform.asyncio
+    import asyncio
+    asyncio.set_event_loop_policy(tornado.platform.asyncio.AnyThreadEventLoopPolicy())
+    
 class WSHandler(tornado.websocket.WebSocketHandler):
-
     @property
     def Th(self):return self._Th
     @Th.setter
     def Th(self,aValue):self._Th=aValue
-    
     @property
     def Parent(self):return self.application.Server
     @property
@@ -114,14 +135,12 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         if self.Running:
             
             if self in self.WebSockets:
-                self.WebSockets.remove(self)
-                
                 self.RedisSubscription=None
+                self.close()
+                self.WebSockets.remove(self)
                 self.Running=False
                 
                 self.Th=None
-                
-
     def Loop(self):
         iMsg=None
         self.DebugMsg("Start Loop")
@@ -130,7 +149,9 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             try:
                 iMsg=self.RedisSubscription.get_message(timeout=1)
                 if iMsg:            
-                    if iMsg['channel'] == self.Key:self.Write(json.dumps(iMsg))
+                    iChannel=Bytes2Str(iMsg['channel'])
+                    iType=Bytes2Str(iMsg['type'])
+                    if iChannel == self.Key:self.Write(json.dumps(iMsg))
                 if self.Running==False:break
             except redis.ConnectionError as E:
                 iError=str(E) + ":" + " Listener " + str(nsCaptureException(sys.exc_info())) + " (" + str(self.Key) + ":" + str(iMsg)  + ")"
@@ -151,8 +172,6 @@ class WSHandler(tornado.websocket.WebSocketHandler):
     def check_origin(self, origin):return True
 
     def on_close(self,aCode = None, aReason = None):
-        
-        
         self.DebugMsg("DEBUG: CLOSE WS (" + str(self.Key) + ") from " + self.RemoteIp + " " + str(aCode) + ":" + str(aReason))
         self.StopListener()
     def Write(self,aMsg):
@@ -160,8 +179,12 @@ class WSHandler(tornado.websocket.WebSocketHandler):
             iObj=aMsg
             self._Contador=self._Contador+1
             try:
-                self.write_message(iObj)
+                iData=iObj
+                if PYTHON3:iData=iData.encode('utf-8')   
+                self.write_message(iData)
             except tornado.websocket.WebSocketClosedError as E:
+                pass
+            except Exception as e:
                 pass
             if self.Debug and self._Contador % 100 ==0:self.DebugMsg("DEBUG: PUBLISH WS (" + str(self.Id) + ") to " + self.RemoteIp + ": " + str(self._Contador))
         except Exception as E:
@@ -180,7 +203,6 @@ class WSHandler(tornado.websocket.WebSocketHandler):
         self._Key=None
         self._Parent = kwargs.pop('aParent')
         super(WSHandler, self).__init__(*args, **kwargs)
-
 
 class red2ws(object):
     @property
@@ -296,9 +318,6 @@ class red2ws(object):
 
     @Redis.setter
     def Redis(self,aValue):self._Redis=aValue
-    
-    
-   
     def __init__(self,aHost="0.0.0.0",aPort=8080,aUrl=r'/(.+)',aRedisIp="127.0.0.1",aRedisPort=7001,aDebug=False):
         self._App=None
         self._LocalIp=None
@@ -318,7 +337,8 @@ class red2ws(object):
         self._REDISIp=aRedisIp
         self._REDISPort=aRedisPort
         self._Redis=None
-        
+
+    
 def GetParams():
     iParser = argparse.ArgumentParser("WebSocket Server Redis")
     iParser.add_argument("--websockport",type=int,help="WebSocket Port",default=8080)
@@ -334,6 +354,8 @@ def Main():
         iParams=GetParams()
         iObj=red2ws(iParams.websockhost,iParams.websockport,iParams.websockurl,iParams.redishost,iParams.redisport,iParams.debug==1)
         iObj.Start()
+        
+        
     except KeyboardInterrupt as Ke:
         pass
     except Exception as E:
@@ -341,7 +363,9 @@ def Main():
         iError=iError.replace("\n"," ")
         iObj.Logger.error(iError)
     finally:
-        if iObj!=None:iObj.Stop()
+        if iObj!=None:
+
+            iObj.Stop()
 
 if __name__ == "__main__":
     Main()
