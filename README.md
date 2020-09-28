@@ -22,7 +22,22 @@ other parameters
   <li>./red2ws.py -websocksslcertfile=[PATH_TO_CERT_FILE] (if websocket connection over ssl, cert file. The protocol for url connection is wss:// if ssl or ws:// for not secure connection. Default "")</li>
 <li>./red2ws.py -websocksslkeyfile=[PATH_TO_CERT_FILE] (if websocket connection over ssl, key file. The protocol for url connection is wss:// if ssl or ws:// for not secure connection. Default "")</li>
 </ul>
-
+<h3>Features</h3>
+<ul>
+  <li>Apache 2.0 license</li>
+  <li>Python 2 & 3 compatibility</li>
+  <li>Subscribe and publish from websocket. Support for WebSocket onmessage callback and suport for a websocket send commmand</li>
+  <li>Javascript sample implementation in a sample html page test_red2ws.html</li>
+  <li>Multi channel subscriptions (view sample html page)</li>
+  <li>Subscription patterns using * ([ws/wss]://[host]:[port]/[websockurl]/Test* subscribe to Test1, Test2, etc channels)</li>
+  <li>ssl for a Websocket & redis (rediscacerts, websocksslcertfile, websocksslkeyfile) and suport for ws and wss protocols</li>
+  <li>support for any redis db id (redisdb)</li>
+  <li>redis password protected (redispassword) </li>
+  <li>custom url for a websockets [ws/wss]://[host]:[port]/[websockurl]/[Channel]</li>
+  <li>custom ports for a redis and websock (websockport, redisport)</li>
+  <li>custom host for a redis (redishost)</li>
+  <li>Reusable and embeddable code</li>
+</ul>
 <h3>Quick Start</h3>
 <ol>
   <li>Run red2ws: ./red2ws.py --debug=1</li>

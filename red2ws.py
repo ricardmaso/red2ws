@@ -1,5 +1,26 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements. See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership. The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+
 import tornado.httpserver
 import tornado.websocket
 import tornado.ioloop
@@ -117,7 +138,10 @@ class WSHandler(tornado.websocket.WebSocketHandler):
     def RedisSubscription(self):
         if self._RedisSubscription==None:
             self._RedisSubscription=self.Redis.pubsub()
-            self._RedisSubscription.subscribe(self.Key)
+            if self.Key[-1]!="*":
+                self._RedisSubscription.subscribe(self.Key)
+            else:
+                self._RedisSubscription.psubscribe(self.Key)
         return self._RedisSubscription
 
     @RedisSubscription.setter
@@ -159,7 +183,12 @@ class WSHandler(tornado.websocket.WebSocketHandler):
                 if iMsg:            
                     iChannel=Bytes2Str(iMsg['channel'])
                     iType=Bytes2Str(iMsg['type'])
-                    if iChannel == self.Key:self.Write(json.dumps(iMsg))
+                    iMatch=False
+                    if self.Key[-1]=="*":
+                        iMatch =self.Key[:-1] in iChannel
+                    else:
+                        iMatch=iChannel==self.Key
+                    if iMatch:self.Write(json.dumps(iMsg))
                 if self.Running==False:break
             except redis.ConnectionError as E:
                 iError=str(E) + ":" + " Listener " + str(nsCaptureException(sys.exc_info())) + " (" + str(self.Key) + ":" + str(iMsg)  + ")"
